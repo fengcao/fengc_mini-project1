@@ -1,0 +1,338 @@
+#+TITLE:     Mini-Project 1
+#+AUTHOR:    Feng Cao
+#+EMAIL:     fengc@andrew.cmu.edu
+#+DATE:      2012-10-29 Mon
+
+Topic 5 was chosen to finish my project: plot the electron density in a fog style. Three examples are shown in this org-file and brief introduction and limitation are discussed.
+
+* Introduction
+Python provide a easy way to visualize 3D data with mayavi. Here I mainly use the mayavi.mlab module. Mlab facilitates users to perform 3D visulization of data, and the website [[http://docs.enthought.com/mayavi/mayavi/mlab.html#simple-scripting-with-mlab][mlab: Python scripting for 3D plotting]] gives several demos of different 3D plots [1].
+
+I tried to plot the electron density as a fog with atomic geometry in it. It looks quite different from the charge density with isosurfaces which has been done in homework 3. To achieve this visional effect, mlab.points3d and mlab.plot3d are necessary to draw atoms and bounds, and mlab.pipeline.volume realizes the fog-like charge density. More details are displayed in the next section.
+
+* Examples and Discussion
+The first example is the charge density of carbon dioxide. I got the charge density from the jasp files of CO2 on gilgamesh which had been created previously. Mlab.points3d helped me display the carbon and oxygen atoms in different colors and mlab.plot3d connected these atoms with sticks. Mlab.pipeline.volume pictured the fantastic charge fog, and this technique is called volume rendering[2]. Vmax and vmin are used to scale the transparency gradient. Red means high density and blue means low density, while yellow is a transitional color. Figure 1 (All these subfigures are gernerated with codes from [[http://docs.enthought.com/mayavi/mayavi/auto/example_chemistry.html]]) shows that when vmax increases, the red part of charge fog becomes smaller and the blue part become larger. When vmax decreases, the visual change is the opposite. When vmin increases, the volume of the total charge cloud decreases because the threshold is enhanced. So proper values of vmax and vmin are critical to achieve a good effect.
+
+#+caption: The visual effects of water molecule with different vmax and vmin: A. vmax=0.5 vmin=0 B. vmax=0.5 vmin=0.5 C. vmax=1 vmin=0 D. vmax=1 vmin=0.5 E. vmax=2 vmin=0 F. vmax=2 vmin=0.5
+#+ATTR_LaTeX: placement=[H]
+[[./diffv.jpg]]
+
+First, plot the charge density of carbon dioxide.
+#+BEGIN_SRC python
+from jasp import *
+from enthought.mayavi import mlab
+from ase.data import vdw_radii
+from ase.data.colors import cpk_colors
+from ase import Atom, Atoms
+with jasp('CO2center') as calc:
+     atoms = calc.get_atoms()
+     x, y, z, cd = calc.get_charge_density()
+# creat atom_x y z to store the coordinates of atoms
+atom_x=[]
+atom_y=[]
+atom_z=[]
+# establish a white canvas
+mlab.figure(bgcolor=(1, 1, 1),size=(350, 350))
+# plot the atoms as spheres
+for atom in atoms:
+    mlab.points3d(atom.x,
+                  atom.y,
+                  atom.z,
+                  scale_factor=vdw_radii[atom.number]/5.,
+                  resolution=20,
+                  color=tuple(cpk_colors[atom.number]),
+                  scale_mode='none')
+# store x y z coordinates of atoms to plot the bonds between them
+    atom_x.append(atom.x)
+    atom_y.append(atom.y)
+    atom_z.append(atom.z)
+# radius=0.07 looks great and atom_x y z give the positions of the successive points of the line
+mlab.plot3d(atom_x, atom_y, atom_z, [1, 2, 1],
+                 tube_radius=0.07, colormap='Reds')
+# Now plot the charge density
+source = mlab.pipeline.scalar_field(x,y,z,cd)
+# vmax and vmin were empirically found by iteration
+vol = mlab.pipeline.volume(source,vmin=0, vmax=2.5)
+# this view came from dft-book, and the distance was found by iteration
+mlab.view(azimuth=-90, elevation=90, distance=10)
+mlab.savefig('co2.png')
+mlab.show()
+#+END_SRC
+
+#+RESULTS:
+#+caption: CO2 charge density
+#+ATTR_LaTeX: placement=[H]
+[[./co2.png]]
+
+Similarly, plot the charge density of oxygen.
+#+BEGIN_SRC python
+from jasp import *
+from enthought.mayavi import mlab
+from ase.data import vdw_radii
+from ase.data.colors import cpk_colors
+from ase import Atom, Atoms
+import numpy as np
+with jasp('O2') as calc:
+     atoms = calc.get_atoms()
+     x, y, z, cd = calc.get_charge_density()
+# creat atom_x y z to store the coordinates of atoms
+atom_x=[]
+atom_y=[]
+atom_z=[]
+# establish a white canvas
+mlab.figure(bgcolor=(1, 1, 1),size=(350, 350))
+# plot the atoms as spheres
+for atom in atoms:
+    mlab.points3d(atom.x,
+                  atom.y,
+                  atom.z,
+                  scale_factor=vdw_radii[atom.number]/5.,
+                  resolution=20,
+                  color=tuple(cpk_colors[atom.number]),
+                  scale_mode='none')
+# store x y z coordinates of atoms to plot the bonds between them
+    atom_x.append(atom.x)
+    atom_y.append(atom.y)
+    atom_z.append(atom.z)
+# plot the bonds between oxygen atoms
+mlab.plot3d(atom_x, atom_y, atom_z, [1, 1],
+                 tube_radius=0.07, colormap='Reds')
+# plot the charge density
+source = mlab.pipeline.scalar_field(x,y,z,cd)
+# vmax and vmin were empirically found by iteration
+vol = mlab.pipeline.volume(source, vmin=0,
+                                   vmax=2)
+mlab.view(azimuth=-90, elevation=90, distance=10)
+mlab.savefig('o2.png')
+mlab.show()
+#+END_SRC
+
+#+RESULTS:
+#+caption: O2 charge density
+#+ATTR_LaTeX: placement=[H]
+[[./o2.png]]
+
+From the CO2 and O2 examples above, volume rendering technique did quite well for simple molecules. Let's try a complicated molecule: benzene.
+#+BEGIN_SRC python
+from jasp import *
+from enthought.mayavi import mlab
+from ase.data import vdw_radii
+from ase.data.colors import cpk_colors
+from ase import Atom, Atoms
+# use the jasp files created previously
+with jasp('C6H6') as calc:
+     atoms = calc.get_atoms()
+# get the charge density of benzene
+     x, y, z, cd = calc.get_charge_density()
+# creat atom_x y z to store the coordinates of atoms
+atom_x=[]
+atom_y=[]
+atom_z=[]
+# creat cx, cx1 to cx7 to store the coordinates of atoms which need to be
+# connected. For example, if I want to picture a bond between carbon with
+# index NO. 1 and hydron with index No. 7, I store their coordinates in
+# cx3,cy3,cz3.Then use plot3d to connect these two atoms. To connect all the
+# twelve atoms, we need a lot of storage space. The indices of all atoms were
+# empirically found by iteration.
+cx=[]
+cy=[]
+cz=[]
+cx1=[]
+cy1=[]
+cz1=[]
+cx2=[]
+cy2=[]
+cz2=[]
+cx3=[]
+cy3=[]
+cz3=[]
+cx4=[]
+cy4=[]
+cz4=[]
+cx5=[]
+cy5=[]
+cz5=[]
+cx6=[]
+cy6=[]
+cz6=[]
+cx7=[]
+cy7=[]
+cz7=[]
+# establish a white canvas
+mlab.figure(bgcolor=(1, 1, 1),size=(350, 350))
+# plot the atoms as spheres
+for atom in atoms:
+    mlab.points3d(atom.x,
+                  atom.y,
+                  atom.z,
+                  scale_factor=vdw_radii[atom.number]/5.,
+                  resolution=20,
+                  color=tuple(cpk_colors[atom.number]),
+                  scale_mode='none')
+# store x y z coordinates of all atoms to plot the bonds between them
+    atom_x.append(atom.x)
+    atom_y.append(atom.y)
+    atom_z.append(atom.z)
+# display bonds between carbons in benzene
+for i in range(0,6):
+    cx.append(atom_x[i])
+    cy.append(atom_y[i])
+    cz.append(atom_z[i])
+mlab.plot3d(cx, cy, cz,tube_radius=0.07, colormap='Reds')
+for i in [0,5]:
+    cx1.append(atom_x[i])
+    cy1.append(atom_y[i])
+    cz1.append(atom_z[i])
+mlab.plot3d(cx1, cy1, cz1,tube_radius=0.07, colormap='Reds')
+# display bond between carbons and hydrogens
+for i in [0,6]:
+    cx2.append(atom_x[i])
+    cy2.append(atom_y[i])
+    cz2.append(atom_z[i])
+mlab.plot3d(cx2, cy2, cz2,tube_radius=0.07, colormap='Reds')
+for i in [1,7]:
+    cx3.append(atom_x[i])
+    cy3.append(atom_y[i])
+    cz3.append(atom_z[i])
+mlab.plot3d(cx3, cy3, cz3,tube_radius=0.07, colormap='Reds')
+for i in [2,8]:
+    cx4.append(atom_x[i])
+    cy4.append(atom_y[i])
+    cz4.append(atom_z[i])
+mlab.plot3d(cx4, cy4, cz4,tube_radius=0.07, colormap='Reds')
+for i in [3,9]:
+    cx5.append(atom_x[i])
+    cy5.append(atom_y[i])
+    cz5.append(atom_z[i])
+mlab.plot3d(cx5, cy5, cz5,tube_radius=0.07, colormap='Reds')
+for i in [4,10]:
+    cx6.append(atom_x[i])
+    cy6.append(atom_y[i])
+    cz6.append(atom_z[i])
+mlab.plot3d(cx6, cy6, cz6,tube_radius=0.07, colormap='Reds')
+for i in [5,11]:
+    cx7.append(atom_x[i])
+    cy7.append(atom_y[i])
+    cz7.append(atom_z[i])
+mlab.plot3d(cx7, cy7, cz7,tube_radius=0.07, colormap='Reds')
+# plot the iso-surface charge density
+mlab.contour3d(x, y, z, cd)
+mlab.view(azimuth=120, elevation=150, distance=13,roll=5)
+mlab.savefig('c6h61.png')
+# plot the volume rendering charge density
+source = mlab.pipeline.scalar_field(x,y,z,cd)
+vol = mlab.pipeline.volume(source,vmin=0, vmax=1.5)
+# set roll=5 to feel more three-dimensional
+mlab.view(azimuth=120, elevation=150, distance=13,roll=5)
+mlab.savefig('c6h6.png')
+mlab.show()
+#+END_SRC
+
+#+caption: iso-surface benzene charge density
+#+ATTR_LaTeX: placement=[H]
+[[./c6h61.png]]
+
+#+caption: volume rendering benzene charge density
+#+ATTR_LaTeX: placement=[H]
+[[./c6h6.png]]
+
+I failed to figure out how to draw double bonds between carbons. But it does not prevent me from examining electron cloud around the atom positions. The figure shows that electrons mainly assemble between three couples of carbons. But actually the electrons of six carbons in benzene forms a big pi bond, which is confirmed in the iso-surface figure. Six carbons share their electrons in the big pi bond. But there is no sight of big pi bond in the fog style figure. What we can tell is that the density between three carbon pairs are higher, which looks similar to Kekule formula.
+
+Let's try methanol in the next example.
+
+#+BEGIN_SRC python
+from jasp import *
+from enthought.mayavi import mlab
+from ase.data import vdw_radii
+from ase.data.colors import cpk_colors
+from ase import Atom, Atoms
+# use the jasp files created previously
+with jasp('CH3OH') as calc:
+     atoms = calc.get_atoms()
+# get the charge density of methanol
+     x, y, z, cd = calc.get_charge_density()
+# creat atom_x y z to store the coordinates of atoms
+atom_x=[]
+atom_y=[]
+atom_z=[]
+# creat cx, cx1 to cx7 to store the coordinates of atoms which need to
+# be connected.
+cx=[]
+cy=[]
+cz=[]
+cx1=[]
+cy1=[]
+cz1=[]
+cx2=[]
+cy2=[]
+cz2=[]
+cx3=[]
+cy3=[]
+cz3=[]
+cx4=[]
+cy4=[]
+cz4=[]
+# establish a white canvas
+mlab.figure(bgcolor=(1, 1, 1),size=(350, 350))
+# plot the atoms as spheres
+for atom in atoms:
+    mlab.points3d(atom.x,
+                  atom.y,
+                  atom.z,
+                  scale_factor=vdw_radii[atom.number]/5.,
+                  resolution=20,
+                  color=tuple(cpk_colors[atom.number]),
+                  scale_mode='none')
+# store x y z coordinates of all atoms to plot the bonds between them
+    atom_x.append(atom.x)
+    atom_y.append(atom.y)
+    atom_z.append(atom.z)
+# display bonds between carbon and oxygen
+for i in range(0,2):
+    cx.append(atom_x[i])
+    cy.append(atom_y[i])
+    cz.append(atom_z[i])
+mlab.plot3d(cx, cy, cz,tube_radius=0.07, colormap='Reds')
+# display bond between carbon and hydrgens
+for i in [0,3]:
+    cx1.append(atom_x[i])
+    cy1.append(atom_y[i])
+    cz1.append(atom_z[i])
+mlab.plot3d(cx1, cy1, cz1,tube_radius=0.07, colormap='Reds')
+for i in [0,4]:
+    cx2.append(atom_x[i])
+    cy2.append(atom_y[i])
+    cz2.append(atom_z[i])
+mlab.plot3d(cx2, cy2, cz2,tube_radius=0.07, colormap='Reds')
+for i in [0,5]:
+    cx3.append(atom_x[i])
+    cy3.append(atom_y[i])
+    cz3.append(atom_z[i])
+mlab.plot3d(cx3, cy3, cz3,tube_radius=0.07, colormap='Reds')
+# display bond between oxygen and hydrogen
+for i in [1,2]:
+    cx4.append(atom_x[i])
+    cy4.append(atom_y[i])
+    cz4.append(atom_z[i])
+mlab.plot3d(cx4, cy4, cz4,tube_radius=0.07, colormap='Reds')
+# Now plot the charge density
+source = mlab.pipeline.scalar_field(x,y,z,cd)
+vol = mlab.pipeline.volume(source,vmin=0, vmax=1.5)
+mlab.view(azimuth=120, elevation=150, distance=13,roll=5)
+mlab.savefig('ch3oh.png')
+mlab.show()
+#+END_SRC
+
+#+caption: methanol charge density
+#+ATTR_LaTeX: placement=[H]
+[[./ch3oh.png]]
+
+It is very strange that carbon is outside the electron cloud, rather than inside it. What is more, three hydrogens connected to carbon should be the same exactly. But apparently they are not the same according this figure. Only one hydrogen has charge cloud around it, which is definitely wrong. Perhaps this strange phenomena results from some error of the original charge density data.
+
+* Conclusion
+volume rendering technique helps readers view the charge density combined with atomic geometry. It is more intuitive and beautiful than isosurface charge density plot. However, there are still some limitation. It performs well while plotting simple molecules, like carbon dioxide and oxygen, but several weakness, such as insufficient accuracy and large storage space needed to plot bonds, is exposed  while applying to complicated molecules.
+
+* Reference
+[1] mlab: Python scripting for 3D plotting URL:[[http://docs.enthought.com/mayavi/mayavi/mlab.html#simple-scripting-with-mlab]]
+
+[2] Visualizing volumetric scalar data [[http://docs.enthought.com/mayavi/mayavi/mlab_case_studies.html]]

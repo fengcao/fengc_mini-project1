@@ -1,0 +1,6 @@
+INCAR created by Atomic Simulation Environment
+ ENCUT = 350.000000
+ PREC = Normal
+ ISPIN = 2
+ NSW = 20
+ IBRION = 2
